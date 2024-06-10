@@ -1,58 +1,50 @@
 from io import BytesIO
 from picamera2 import Picamera2, configuration
-from time import sleep, time
 import numpy as np
-from libcamera import Transform
 from PIL import Image
+import cv2
+
 
 class Camera():
-    _last_frame_time: int = time()
-    _frame_rate: int = 20
     _compression: int = 50
     
-    # temp
-    __last_frame_time = time()
     
     def __init__(self):
         self.configuration: configuration = None
-        self.camera = self._create_camera_object()
+        self.camera: Picamera2 = self._create_camera_object()
         self.camera.configure(self._create_configuration())
         self.camera.start()
     
     
     def get_jpeg_bytes(self) -> bytes:
-        start = time()
-        pil_image = Image.fromarray(self._get_frame()[:, :, :3])
-        take_pic_end = time()
-        print("take picture time: ", take_pic_end - start)
-        image_bytes = BytesIO()
-        pil_image.save(image_bytes, format='jpeg', quality=self._compression)
-        bytes = image_bytes.getvalue()
-        end = time()
-        print("encode time: ", end - take_pic_end)
-        print("send time: ", start - self.__last_frame_time)
-        print(f"\nfull time: ", end - self.__last_frame_time)
-        self.__last_frame_time = start
+        byte_io = BytesIO()
+        array = self._get_frame()
+        print("array size: ", array[: ,: , 0])
+        array[:, :, 0] = array[:, :, 0]/1.5
+        Image.fromarray(array[:, :, :3]).save(byte_io, format='JPEG')
         
-        
-        return bytes
+        return byte_io.getvalue()
         
     
     def _get_frame(self) -> np.ndarray:
-        array = self.camera.capture_array()
-        return array
+        return self.camera.capture_array()
     
     
     def _create_configuration(self) -> dict:
         if self.camera:
+            
             mode = self.camera.sensor_modes[1]
             
+            self.camera.white_balance_mode = 'manual'
+			
             config = self.camera.create_video_configuration(
                 sensor={'output_size': mode['size'], 
                         'bit_depth': mode['bit_depth']},
-                buffer_count=1,
-                # Temporary
-                transform=Transform(vflip=1)
+				controls={"AwbEnable": False,
+						 "ColourGains": (0.95, 1.0),
+                         "FrameDurationLimits": (33333, 33333)},
+                buffer_count=1
+				#white_balance=(0.95, 1.2)
                 )
             return config
         else:
@@ -73,4 +65,7 @@ class Camera():
     
     
     def take_photo(self):
+    """ Takes a photo and saves it in archiwization purpose
+    """
         raise NotImplementedError()
+    
